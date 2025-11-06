@@ -202,56 +202,55 @@ public:
 
    //------------------------------------------------------------------
    // ۳. آپدیت پنل (تابع اصلی)
-   //------------------------------------------------------------------
-   bool UpdatePanel() // ===> bool برمی‌گرداند
-     {
+   //---------------------------------------------------------------
+   bool UpdatePanel()
+   {
       int num_pairs = ArraySize(m_pair_array);
-      int num_tfs = ArraySize(m_tf_array);
+      int num_tfs   = ArraySize(m_tf_array);
       
-      bool is_still_loading = false; // (پیش‌فرض: لود تمام شده)
-
+      bool is_still_loading = false;
+   
       for(int i = 0; i < num_pairs; i++) 
-        {
+      {
          int aligned_up_count = 0;
          int aligned_down_count = 0;
-
+   
          for(int j = 0; j < num_tfs; j++) 
-           {
-            SqueezeResult result;
-            result = f_calculateAllSignals(m_pair_array[i], m_tf_enum_array[j]);
-
+         {
+            SqueezeResult result = f_calculateAllSignals(m_pair_array[i], m_tf_enum_array[j]);
+   
             if(m_check_ma_stack)
-              {
-               if(result.isAscending) aligned_up_count++;
+            {
+               if(result.isAscending)  aligned_up_count++;
                if(result.isDescending) aligned_down_count++;
-              }
-              
-            if(result.state == STATE_LOADING) // <-- (تصحیح شد) بررسی وضعیت لودینگ
-              {
-               is_still_loading = true; // ===> اگر حتی یک سلول در حال لود بود، فلگ را true کن
-              }
-
-            string cell_name = m_prefix + "cell_" + (string)i + "_" + (string)j;
-            UpdateLabelText(cell_name, result.cellText);
-            ObjectSetInteger(0, cell_name, OBJPROP_BGCOLOR, result.cellBgColor);
-            ObjectSetInteger(0, cell_name, OBJPROP_COLOR, result.cellTextColor); // <-- (تصحیح شد) استفاده از رنگ متن داینامیک
-           }
-
+            }
+   
+            if(result.state == STATE_LOADING)
+               is_still_loading = true;
+   
+            string bg_name  = m_prefix + "cell_bg_"  + (string)i + "_" + (string)j;
+            string txt_name = m_prefix + "cell_txt_" + (string)i + "_" + (string)j;
+   
+            ObjectSetInteger(0, bg_name, OBJPROP_BGCOLOR, result.cellBgColor);
+            ObjectSetString(0, txt_name, OBJPROP_TEXT, result.cellText);
+            ObjectSetInteger(0, txt_name, OBJPROP_COLOR, result.cellTextColor);
+         }
+   
          string pair_label_name = m_prefix + "pair_" + (string)i;
          color pair_name_color = m_color_text; 
          if(m_check_ma_stack)
-           {
-            if(aligned_up_count >= m_min_tf_aligned) pair_name_color = m_color_ma_up;
-            else if(aligned_down_count >= m_min_tf_aligned) pair_name_color = m_color_ma_down;
-           }
+         {
+            if(aligned_up_count >= m_min_tf_aligned)
+               pair_name_color = m_color_ma_up;
+            else if(aligned_down_count >= m_min_tf_aligned)
+               pair_name_color = m_color_ma_down;
+         }
          ObjectSetInteger(0, pair_label_name, OBJPROP_COLOR, pair_name_color);
-        }
-        
-      ChartRedraw(0);
+      }
       
-      return is_still_loading; // ===> وضعیت لود را به OnTimer برگردان
-     }
-
+      ChartRedraw(0);
+      return is_still_loading;
+   }
 //+------------------------------------------------------------------+
 //| بخش خصوصی (توابع کمکی)
 //+------------------------------------------------------------------+
@@ -487,46 +486,52 @@ private:
    // رسم ساختار اولیه پنل
    //------------------------------------------------------------------
    void DrawPanelLayout()
-     {
+   {
       int num_pairs = ArraySize(m_pair_array);
       int num_tfs = ArraySize(m_tf_array);
       if(num_pairs == 0 || num_tfs == 0) return; 
-
+   
       int total_width = m_header_width + (num_tfs * m_cell_width);
       int total_height = m_cell_height + (num_pairs * m_cell_height);
-
-      CreateRect("Panel_BG", 0, 0, total_width, total_height, m_color_bg, 200); 
-
+   
+      // پس‌زمینه کل پنل
+      CreateRect("Panel_BG", 0, 0, total_width, total_height, m_color_bg); 
+   
       int current_y = 0;
-
-      // --- ۱. رسم هدر (تایم‌فریم‌ها) ---
-      CreateLabel("header_corner", "PAIRS", 0, current_y, m_header_width, m_cell_height, m_color_bg, m_color_text, ALIGN_CENTER);
+   
+      // --- هدر (تایم‌فریم‌ها) ---
+      CreateLabel("header_corner", "PAIRS", 0, current_y, m_header_width, m_cell_height, m_color_text, ALIGN_CENTER);
       for(int j = 0; j < num_tfs; j++)
-        {
+      {
          int x_pos = m_header_width + (j * m_cell_width);
-         CreateLabel("tf_" + (string)j, m_tf_array[j], x_pos, current_y, m_cell_width, m_cell_height, m_color_bg, m_color_text, ALIGN_CENTER);
-        }
-
+         CreateLabel("tf_" + (string)j, m_tf_array[j], x_pos, current_y, m_cell_width, m_cell_height, m_color_text, ALIGN_CENTER);
+      }
+   
       current_y += m_cell_height;
-
-      // --- ۲. رسم ردیف‌ها (جفت ارزها و سلول‌های داده) ---
+   
+      // --- ردیف‌های داده ---
       for(int i = 0; i < num_pairs; i++)
-        {
-         // هدر ردیف (نام جفت ارز)
-         CreateLabel("pair_" + (string)i, m_pair_array[i], 0, current_y, m_header_width, m_cell_height, m_color_bg, m_color_text, ALIGN_CENTER);
-
-         // سلول‌های داده
+      {
+         // نام جفت ارز
+         CreateLabel("pair_" + (string)i, m_pair_array[i], 
+                     0, current_y, m_header_width, m_cell_height, m_color_text, ALIGN_CENTER);
+   
+         // سلول‌ها
          for(int j = 0; j < num_tfs; j++)
-           {
+         {
             int x_pos = m_header_width + (j * m_cell_width);
-            string cell_name = "cell_" + (string)i + "_" + (string)j;
-            // سلول را با پس‌زمینه لودینگ و متن "..." ایجاد کن
-            CreateLabel(cell_name, "...", x_pos, current_y, m_cell_width, m_cell_height, m_color_loading, m_color_text, ALIGN_CENTER);
-           }
+            
+            // پس‌زمینه سلول
+            CreateRect("cell_bg_" + (string)i + "_" + (string)j,
+                       x_pos, current_y, m_cell_width, m_cell_height, m_color_loading);
+            
+            // متن سلول
+            CreateLabel("cell_txt_" + (string)i + "_" + (string)j, "...",
+                        x_pos, current_y, m_cell_width, m_cell_height, m_color_text, ALIGN_CENTER);
+         }
          current_y += m_cell_height;
-        }
-     }
-
+      }
+   }
    //------------------------------------------------------------------
    // توابع کمکی پردازش ورودی
    //------------------------------------------------------------------
@@ -571,60 +576,58 @@ private:
    //------------------------------------------------------------------
    // توابع کمکی رسم
    //------------------------------------------------------------------
-   void CreateRect(string name, int x, int y, int w, int h, color c, uchar alpha = 255)
-     {
-      string obj_name = m_prefix + name;
-      if(ObjectFind(0, obj_name) < 0)
-        {
-         ObjectCreate(0, obj_name, OBJ_RECTANGLE_LABEL, 0, 0, 0);
-         ObjectSetInteger(0, obj_name, OBJPROP_CORNER, m_panel_corner);
-         ObjectSetInteger(0, obj_name, OBJPROP_XDISTANCE, m_x_offset + x);
-         ObjectSetInteger(0, obj_name, OBJPROP_YDISTANCE, m_y_offset + y);
-         ObjectSetInteger(0, obj_name, OBJPROP_XSIZE, w);
-         ObjectSetInteger(0, obj_name, OBJPROP_YSIZE, h);
-         ObjectSetInteger(0, obj_name, OBJPROP_BGCOLOR, c);
-         ObjectSetInteger(0, obj_name, OBJPROP_COLOR, c); 
-         ObjectSetInteger(0, obj_name, OBJPROP_BORDER_TYPE, BORDER_FLAT);
-         ObjectSetInteger(0, obj_name, OBJPROP_BACK, true);
-         ObjectSetInteger(0, obj_name, OBJPROP_SELECTABLE, false);
-         ObjectSetInteger(0, obj_name, OBJPROP_HIDDEN, true);
-        }
-     }
+   void CreateRect(string name, int x, int y, int w, int h, color bg_color)
+{
+   string obj_name = m_prefix + name;
+   if(ObjectFind(0, obj_name) < 0)
+   {
+      ObjectCreate(0, obj_name, OBJ_RECTANGLE_LABEL, 0, 0, 0);
+      ObjectSetInteger(0, obj_name, OBJPROP_CORNER, m_panel_corner);
+      ObjectSetInteger(0, obj_name, OBJPROP_XDISTANCE, m_x_offset + x);
+      ObjectSetInteger(0, obj_name, OBJPROP_YDISTANCE, m_y_offset + y);
+      ObjectSetInteger(0, obj_name, OBJPROP_XSIZE, w);
+      ObjectSetInteger(0, obj_name, OBJPROP_YSIZE, h);
+      ObjectSetInteger(0, obj_name, OBJPROP_BGCOLOR, bg_color);
+      ObjectSetInteger(0, obj_name, OBJPROP_FILL, true);
+      ObjectSetInteger(0, obj_name, OBJPROP_BORDER_TYPE, BORDER_FLAT);
+      ObjectSetInteger(0, obj_name, OBJPROP_BACK, true);
+      ObjectSetInteger(0, obj_name, OBJPROP_SELECTABLE, false);
+      ObjectSetInteger(0, obj_name, OBJPROP_HIDDEN, true);
+   }
+}
+void CreateLabel(string name, string text, int x, int y, int w, int h, color text_color, ENUM_ALIGN_MODE align = ALIGN_LEFT)
+{
+   string obj_name = m_prefix + name;
+   if(ObjectFind(0, obj_name) < 0)
+   {
+      ObjectCreate(0, obj_name, OBJ_LABEL, 0, 0, 0);
+      ObjectSetString(0, obj_name, OBJPROP_TEXT, text);
+      ObjectSetInteger(0, obj_name, OBJPROP_CORNER, m_panel_corner);
+      
+      int x_pos = x;
+      ENUM_ANCHOR_POINT anchor = ANCHOR_LEFT;
+      
+      if(align == ALIGN_CENTER)
+      {
+         x_pos = x + w / 2;
+         anchor = ANCHOR_CENTER;
+      }
+      else if(align == ALIGN_RIGHT)
+      {
+         x_pos = x + w;
+         anchor = ANCHOR_RIGHT;
+      }
 
-   // (تصحیح شده برای تراز عمودی)
-   void CreateLabel(string name, string text, int x, int y, int w, int h, color bg_color, color text_color, ENUM_ALIGN_MODE align = ALIGN_LEFT)
-     {
-      string obj_name = m_prefix + name;
-      if(ObjectFind(0, obj_name) < 0)
-        {
-         ObjectCreate(0, obj_name, OBJ_LABEL, 0, 0, 0);
-         ObjectSetString(0, obj_name, OBJPROP_TEXT, text);
-         ObjectSetInteger(0, obj_name, OBJPROP_CORNER, m_panel_corner);
-
-         int x_pos = m_x_offset + x;
-         ENUM_ANCHOR_POINT anchor = ANCHOR_LEFT;
-         if(align == ALIGN_CENTER)
-           {
-            x_pos = m_x_offset + x + (w / 2);
-            anchor = ANCHOR_CENTER;
-           }
-         else if(align == ALIGN_RIGHT)
-           {
-            x_pos = m_x_offset + x + w - 5; // 5 پیکسل فاصله از لبه راست
-            anchor = ANCHOR_RIGHT;
-           }
-
-         ObjectSetInteger(0, obj_name, OBJPROP_XDISTANCE, x_pos);
-         ObjectSetInteger(0, obj_name, OBJPROP_YDISTANCE, m_y_offset + y + (h / 2) + 1); // تراز عمودی وسط (کمی تنظیم)
-         ObjectSetInteger(0, obj_name, OBJPROP_COLOR, text_color);
-         ObjectSetInteger(0, obj_name, OBJPROP_BGCOLOR, bg_color);
-         ObjectSetInteger(0, obj_name, OBJPROP_FONTSIZE, m_font_size);
-         ObjectSetString(0, obj_name, OBJPROP_FONT, m_font_name);
-         ObjectSetInteger(0, obj_name, OBJPROP_ANCHOR, anchor);
-         ObjectSetInteger(0, obj_name, OBJPROP_BACK, false); // برای دیده شدن پس‌زمینه
-         ObjectSetInteger(0, obj_name, OBJPROP_SELECTABLE, false);
-        }
-     }
+      ObjectSetInteger(0, obj_name, OBJPROP_XDISTANCE, m_x_offset + x_pos);
+      ObjectSetInteger(0, obj_name, OBJPROP_YDISTANCE, m_y_offset + y + h / 2);
+      ObjectSetInteger(0, obj_name, OBJPROP_COLOR, text_color);
+      ObjectSetInteger(0, obj_name, OBJPROP_FONTSIZE, m_font_size);
+      ObjectSetString(0, obj_name, OBJPROP_FONT, m_font_name);
+      ObjectSetInteger(0, obj_name, OBJPROP_ANCHOR, anchor);
+      ObjectSetInteger(0, obj_name, OBJPROP_BACK, false);
+      ObjectSetInteger(0, obj_name, OBJPROP_SELECTABLE, false);
+   }
+}
 
    // (تصحیح شده - از m_prefix استفاده نمی‌کند چون نام کامل ارسال می‌شود)
    void UpdateLabelText(string name, string text)

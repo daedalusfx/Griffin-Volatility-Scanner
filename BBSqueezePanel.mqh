@@ -1,7 +1,7 @@
 //+------------------------------------------------------------------+
 //|                                           BBSqueezePanel.mqh |
 //|        کلاس پنل اسکنر BB Squeeze (بر اساس VdsPanel)           |
-//|                    (نسخه ۱.۴ - Non-Blocking)                   |
+//|                    (نسخه ۲.۰ - UI سه‌حالته)                    |
 //+------------------------------------------------------------------+
 #ifndef BBSQUEZEPANEL_MQH
 #define BBSQUEZEPANEL_MQH
@@ -9,12 +9,22 @@
 #include <Controls\Label.mqh> 
 
 //+------------------------------------------------------------------+
+//| (جدید) تعریف وضعیت‌های سلول
+//+------------------------------------------------------------------+
+enum ENUM_SQUEEZE_STATE
+{
+   STATE_LOADING,
+   STATE_SQUEEZE,     // فشردگی (زرد)
+   STATE_EXPANSION,   // انبساط / Fire (سبز)
+   STATE_CONTRACTION  // کاهش نوسان (قرمز)
+};
+
+//+------------------------------------------------------------------+
 //| ساختار برای نگهداری نتایج اسکن (برای هر سلول)
 //+------------------------------------------------------------------+
 struct SqueezeResult
 {
    // --- سیگنال‌های خام ---
-   bool              inSqueeze;
    bool              isAscending;     // MA Stack صعودی
    bool              isDescending;    // MA Stack نزولی
    bool              upTrend;           // Keltner Channel
@@ -22,12 +32,16 @@ struct SqueezeResult
    bool              upSlowing;
    bool              downSlowing;
    int               barsSinceSwitch;
+   
+   ENUM_SQUEEZE_STATE state; // <-- (جایگزین bool inSqueeze)
 
    // --- مقادیر نهایی ---
    string            cellText;
-   color             cellBgColor;     // رنگ پس‌زمینه سلول
+   color             cellBgColor;     // رنگ پس‌زمینه سلول (رنگ تگ)
+   color             cellTextColor;   // <-- (جدید) رنگ متن تگ
    color             pairNameColor;     // رنگ جفت ارز (برای همسویی)
 };
+
 //+------------------------------------------------------------------+
 //| کلاس پنل اسکنر BB Squeeze
 //+------------------------------------------------------------------+
@@ -74,6 +88,7 @@ private:
    color             m_color_text;
    color             m_color_bg;
    color             m_color_loading;   // رنگ سلول در حال لود
+   color             m_color_squeeze;   // <-- (جدید) رنگ برای حالت Squeeze
 
    //------------------------------------------------------------------
    // تابع کمکی: تبدیل رشته قیمت به ENUM_APPLIED_PRICE
@@ -125,15 +140,21 @@ public:
       m_ma_price_str = "Close";
       m_min_tf_aligned = 3;
 
-      m_color_low_vol = C'255,0,0';     // Red
-      m_color_high_vol = C'0,128,0';    // Green
-      m_color_ma_up = C'0,255,255';     // Aqua
-      m_color_ma_down = C'255,0,0';     // Red
-      m_color_kc_up = C'0,255,255';     // Aqua
-      m_color_kc_down = C'255,0,0';     // Red
-      m_color_text = C'255,255,255';   // White
-      m_color_bg = C'30,30,30';         // Dark Grey
-      m_color_loading = C'50,50,50';   // Loading Grey
+      // رنگ‌های UI جدید
+      m_color_low_vol = C'176, 30, 30';    // قرمز تیره‌تر (Contraction)
+      m_color_high_vol = C'0, 100, 0';    // سبز تیره‌تر (Expansion / Fire)
+      m_color_squeeze = C'255, 200, 0'; // زرد (Squeeze)
+
+      // رنگ‌های همسویی جفت ارز
+      m_color_ma_up = C'0, 255, 255';     // Aqua
+      m_color_ma_down = C'255, 80, 80';   // قرمز روشن
+      m_color_kc_up = C'0, 255, 255';     // Aqua (استفاده نمی‌شود)
+      m_color_kc_down = C'255, 80, 80';   // قرمز روشن (استفاده نمی‌شود)
+
+      // رنگ‌های پایه
+      m_color_text = C'255, 255, 255';   // White
+      m_color_bg = C'30, 30, 30';         // Dark Grey
+      m_color_loading = C'50, 50, 50';   // Loading Grey
      }
 
    //------------------------------------------------------------------
@@ -182,7 +203,7 @@ public:
    //------------------------------------------------------------------
    // ۳. آپدیت پنل (تابع اصلی)
    //------------------------------------------------------------------
-bool UpdatePanel() // ===> FIX: حالا bool برمی‌گرداند
+   bool UpdatePanel() // ===> bool برمی‌گرداند
      {
       int num_pairs = ArraySize(m_pair_array);
       int num_tfs = ArraySize(m_tf_array);
@@ -205,15 +226,15 @@ bool UpdatePanel() // ===> FIX: حالا bool برمی‌گرداند
                if(result.isDescending) aligned_down_count++;
               }
               
-            if(result.cellText == "...")
+            if(result.state == STATE_LOADING) // <-- (تصحیح شد) بررسی وضعیت لودینگ
               {
-               is_still_loading = true; // ===> FIX: اگر حتی یک سلول در حال لود بود، فلگ را true کن
+               is_still_loading = true; // ===> اگر حتی یک سلول در حال لود بود، فلگ را true کن
               }
 
             string cell_name = m_prefix + "cell_" + (string)i + "_" + (string)j;
             UpdateLabelText(cell_name, result.cellText);
             ObjectSetInteger(0, cell_name, OBJPROP_BGCOLOR, result.cellBgColor);
-            ObjectSetInteger(0, cell_name, OBJPROP_COLOR, m_color_text);
+            ObjectSetInteger(0, cell_name, OBJPROP_COLOR, result.cellTextColor); // <-- (تصحیح شد) استفاده از رنگ متن داینامیک
            }
 
          string pair_label_name = m_prefix + "pair_" + (string)i;
@@ -228,7 +249,7 @@ bool UpdatePanel() // ===> FIX: حالا bool برمی‌گرداند
         
       ChartRedraw(0);
       
-      return is_still_loading; // ===> FIX: وضعیت لود را به OnTimer برگردان
+      return is_still_loading; // ===> وضعیت لود را به OnTimer برگردان
      }
 
 //+------------------------------------------------------------------+
@@ -237,14 +258,16 @@ bool UpdatePanel() // ===> FIX: حالا bool برمی‌گرداند
 private:
 
    //------------------------------------------------------------------
-   // (منطق اصلی) محاسبه سیگنال‌ها (نسخه ۱.۴ - Non-Blocking)
+   // (منطق اصلی) محاسبه سیگنال‌ها (نسخه ۲.۰)
    //------------------------------------------------------------------
    SqueezeResult f_calculateAllSignals(string symbol, ENUM_TIMEFRAMES tf)
      {
       SqueezeResult res;
-      // ZeroMemory(res);
+      // ZeroMemory(res); // (قبلاً حذف شد)
+      res.state = STATE_LOADING; // <-- (جدید)
       res.cellText = "...";
       res.cellBgColor = m_color_loading;
+      res.cellTextColor = m_color_text; // <-- (جدید)
 
       // --- ۱. آماده‌سازی پارامترها ---
       ENUM_APPLIED_PRICE price_enum = GetPriceEnum(m_ma_price_str);
@@ -253,7 +276,7 @@ private:
       int bars_to_copy = 100 + m_shift; 
       if(bars_to_copy < 100) bars_to_copy = 100; 
 
-      // --- ۲. ===> REFACTOR: فچ کردن غیرمسدودکننده دیتا <=== ---
+      // --- ۲. فچ کردن غیرمسدودکننده دیتا ---
       double close_prices[];
       ArrayResize(close_prices, bars_to_copy + 2); 
       
@@ -262,9 +285,7 @@ private:
         {
          // (دیتا آماده نیست. بررسی خطا)
          long error_code = GetLastError();
-         if(
-                  // 4302
-            error_code == ERR_HISTORY_NOT_FOUND)         // 5202
+         if(error_code == ERR_HISTORY_NOT_FOUND || error_code == 5202)
            {
             // (دیتا در حال دانلود است. منتظر نمان! فقط خارج شو)
             return res; // (res حاوی "..." است)
@@ -276,8 +297,6 @@ private:
             return res;
            }
         }
-      // --- (اگر کد به اینجا برسد، یعنی دیتا آماده است) ---
-
 
       // --- ۳. ساخت هندل‌های اندیکاتتور ---
       // (چون دیتا آماده است، اینها نباید خطای 4302 بدهند)
@@ -309,13 +328,14 @@ private:
         }
 
       // --- ۴. کپی کردن دیتای اندیکاتورها ---
-      double bb_upper[], bb_lower[];
+      double bb_upper[], bb_lower[], bb_basis[]; // <-- (جدید) bb_basis اضافه شد
       double kc_basis[], kc_atr[];
 
-      ArrayResize(bb_upper, bars_to_copy); ArrayResize(bb_lower, bars_to_copy);
+      ArrayResize(bb_upper, bars_to_copy); ArrayResize(bb_lower, bars_to_copy); ArrayResize(bb_basis, bars_to_copy); // <-- (جدید)
       ArrayResize(kc_basis, bars_to_copy); ArrayResize(kc_atr, bars_to_copy);
 
-      if(CopyBuffer(bb_handle, 1, 0, bars_to_copy, bb_upper) < bars_to_copy ||
+      if(CopyBuffer(bb_handle, 0, 0, bars_to_copy, bb_basis) < bars_to_copy || // <-- (جدید) کپی بافر 0 (خط وسط)
+         CopyBuffer(bb_handle, 1, 0, bars_to_copy, bb_upper) < bars_to_copy ||
          CopyBuffer(bb_handle, 2, 0, bars_to_copy, bb_lower) < bars_to_copy ||
          CopyBuffer(kc_ma_handle, 0, 0, bars_to_copy, kc_basis) < bars_to_copy ||
          CopyBuffer(kc_atr_handle, 0, 0, bars_to_copy, kc_atr) < bars_to_copy)
@@ -350,7 +370,7 @@ private:
       // (الف) منطق Squeeze
       double upperKC = kc_basis[m_shift] + (kc_atr[m_shift] * m_kc_multiplier);
       double lowerKC = kc_basis[m_shift] - (kc_atr[m_shift] * m_kc_multiplier);
-      res.inSqueeze = (bb_lower[m_shift] > lowerKC) && (bb_upper[m_shift] < upperKC);
+      bool in_squeeze = (bb_lower[m_shift] > lowerKC) && (bb_upper[m_shift] < upperKC);
 
       // (ب) منطق Keltner Trend
       res.upTrend = (close_prices[m_shift] > upperKC);
@@ -363,9 +383,13 @@ private:
          res.isDescending = true;
          for(int i = 0; i < num_ma - 1; i++)
            {
+            // [0] = سریعتر (مثلا 8) ، [1] = کندتر (مثلا 21)
+            // برای صعودی، سریعتر باید > کندتر باشد
             if(ma_values[i] <= ma_values[i+1]) res.isAscending = false;
+            // برای نزولی، سریعتر باید < کندتر باشد
             if(ma_values[i] >= ma_values[i+1]) res.isDescending = false;
            }
+         // اگر هر دو true یا هر دو false باشند، خنثی است
          if(res.isAscending == res.isDescending)
            {
             res.isAscending = false;
@@ -384,19 +408,33 @@ private:
          double lowerKC_hist = kc_basis[i] - (kc_atr[i] * m_kc_multiplier);
          bool inSqueeze_hist = (bb_lower[i] > lowerKC_hist) && (bb_upper[i] < upperKC_hist);
 
-         if(inSqueeze_hist != res.inSqueeze) 
+         if(inSqueeze_hist != in_squeeze) // <-- (تصحیح شد) مقایسه با وضعیت فعلی
            {
             res.barsSinceSwitch = (i - m_shift);
             break;
            }
          
-         if(i == m_shift + max_scan - 1) 
-           {
-            res.barsSinceSwitch = max_scan;
-           }
+          if(i == m_shift + max_scan - 1) // اگر تا انتهای اسکن وضعیت یکی بود
+            {
+             res.barsSinceSwitch = max_scan;
+            }
         }
+        
+      // --- (جدید) ۶. محاسبه Squeeze/Expansion/Contraction ---
+      // (این منطق از VdsPanel.mqh گرفته شده است)
+      double bbw_now = (bb_basis[m_shift] != 0) ? (bb_upper[m_shift] - bb_lower[m_shift]) / bb_basis[m_shift] : 0;
+      double bbw_prev = (bb_basis[m_shift+1] != 0) ? (bb_upper[m_shift+1] - bb_lower[m_shift+1]) / bb_basis[m_shift+1] : 0;
+      bool market_expansion = (bbw_now > bbw_prev);
+      
+      if(in_squeeze)
+         res.state = STATE_SQUEEZE;
+      else if(market_expansion)
+         res.state = STATE_EXPANSION;
+      else
+         res.state = STATE_CONTRACTION;
 
-      // --- ۶. پاکسازی تمام هندل‌ها ---
+
+      // --- ۷. پاکسازی تمام هندل‌ها ---
       IndicatorRelease(bb_handle);
       IndicatorRelease(kc_ma_handle);
       IndicatorRelease(kc_atr_handle);
@@ -405,15 +443,43 @@ private:
          IndicatorRelease(ma_handles[i]);
         }
 
-      // --- ۷. فرمت کردن خروجی نهایی ---
-      string squeeze_char = res.inSqueeze ? "●" : "●";
-      string bars_str = "(" + (res.barsSinceSwitch >= 50 ? "+" : (string)res.barsSinceSwitch) + ")";
-      string ma_arrow = res.isAscending ? " ↗" : (res.isDescending ? " ↘" : "");
-      string kc_arrow = res.upTrend ? " ↑" : (res.downTrend ? " ↓" : "");
+      // --- ۸. فرمت کردن خروجی نهایی (بر اساس طرح ۲) ---
+      string state_text = "";
       
-      res.cellText = squeeze_char + bars_str + ma_arrow + kc_arrow;
-      res.cellBgColor = res.inSqueeze ? m_color_low_vol : m_color_high_vol;
-      Print(symbol, " ", EnumToString(tf), " -> ", res.cellText);
+      switch(res.state)
+      {
+         case STATE_SQUEEZE:
+            state_text = "SQUEEZE";
+            res.cellBgColor = m_color_squeeze; // زرد
+            res.cellTextColor = C'0,0,0';      // متن مشکی برای کنتراست
+            break;
+         case STATE_EXPANSION:
+            state_text = "FIRE"; // (انبساط)
+            res.cellBgColor = m_color_high_vol; // سبز
+            res.cellTextColor = m_color_text;     // متن سفید
+            break;
+         case STATE_CONTRACTION:
+            state_text = "CONTRACT"; // (کاهش نوسان)
+            res.cellBgColor = m_color_low_vol;  // قرمز
+            res.cellTextColor = m_color_text;     // متن سفید
+            break;
+         // حالت STATE_LOADING قبلاً در ابتدای تابع مدیریت شده است
+         default:
+            // res.cellText = "..." (از قبل تنظیم شده)
+            break; 
+      }
+      
+      // فقط اگر در حال لود نیستیم، متن را بازنویسی کن
+      if(res.state != STATE_LOADING)
+      {
+         string bars_str = "(" + (res.barsSinceSwitch >= 50 ? "+" : (string)res.barsSinceSwitch) + ")";
+         // متن نهایی، بدون فلش‌ها
+         res.cellText = state_text + " " + bars_str;
+      }
+
+      // (خط دیباگ شما - می‌توانید آن را حذف کنید)
+      // Print(symbol, " ", EnumToString(tf), " -> ", res.cellText);
+
       return res;
      }
 
@@ -446,12 +512,15 @@ private:
       // --- ۲. رسم ردیف‌ها (جفت ارزها و سلول‌های داده) ---
       for(int i = 0; i < num_pairs; i++)
         {
+         // هدر ردیف (نام جفت ارز)
          CreateLabel("pair_" + (string)i, m_pair_array[i], 0, current_y, m_header_width, m_cell_height, m_color_bg, m_color_text, ALIGN_CENTER);
 
+         // سلول‌های داده
          for(int j = 0; j < num_tfs; j++)
            {
             int x_pos = m_header_width + (j * m_cell_width);
             string cell_name = "cell_" + (string)i + "_" + (string)j;
+            // سلول را با پس‌زمینه لودینگ و متن "..." ایجاد کن
             CreateLabel(cell_name, "...", x_pos, current_y, m_cell_width, m_cell_height, m_color_loading, m_color_text, ALIGN_CENTER);
            }
          current_y += m_cell_height;
@@ -485,6 +554,7 @@ private:
    // تابع کمکی برای تبدیل رشته تایم‌فریم به Enum
    ENUM_TIMEFRAMES StringToTimeframe(string tf_str)
      {
+      // (این تابع باید کامل‌تر شود تا تمام تایم‌فریم‌ها را پشتیبانی کند)
       if(tf_str == "M1") return PERIOD_M1;
       if(tf_str == "M5") return PERIOD_M5;
       if(tf_str == "M15") return PERIOD_M15;
@@ -493,6 +563,8 @@ private:
       if(tf_str == "H4") return PERIOD_H4;
       if(tf_str == "D1") return PERIOD_D1;
       if(tf_str == "W1") return PERIOD_W1;
+      if(tf_str == "MN1") return PERIOD_MN1;
+      // ... سایر تایم‌فریم‌ها ...
       return _Period; // پیش‌فرض
      }
 
@@ -519,6 +591,7 @@ private:
         }
      }
 
+   // (تصحیح شده برای تراز عمودی)
    void CreateLabel(string name, string text, int x, int y, int w, int h, color bg_color, color text_color, ENUM_ALIGN_MODE align = ALIGN_LEFT)
      {
       string obj_name = m_prefix + name;
@@ -537,25 +610,26 @@ private:
            }
          else if(align == ALIGN_RIGHT)
            {
-            x_pos = m_x_offset + x + w - 5; 
+            x_pos = m_x_offset + x + w - 5; // 5 پیکسل فاصله از لبه راست
             anchor = ANCHOR_RIGHT;
            }
 
          ObjectSetInteger(0, obj_name, OBJPROP_XDISTANCE, x_pos);
-         ObjectSetInteger(0, obj_name, OBJPROP_YDISTANCE, m_y_offset + y + (h / 2)); // تراز عمودی وسط
+         ObjectSetInteger(0, obj_name, OBJPROP_YDISTANCE, m_y_offset + y + (h / 2) + 1); // تراز عمودی وسط (کمی تنظیم)
          ObjectSetInteger(0, obj_name, OBJPROP_COLOR, text_color);
          ObjectSetInteger(0, obj_name, OBJPROP_BGCOLOR, bg_color);
          ObjectSetInteger(0, obj_name, OBJPROP_FONTSIZE, m_font_size);
          ObjectSetString(0, obj_name, OBJPROP_FONT, m_font_name);
          ObjectSetInteger(0, obj_name, OBJPROP_ANCHOR, anchor);
-         ObjectSetInteger(0, obj_name, OBJPROP_BACK, false);
+         ObjectSetInteger(0, obj_name, OBJPROP_BACK, false); // برای دیده شدن پس‌زمینه
          ObjectSetInteger(0, obj_name, OBJPROP_SELECTABLE, false);
         }
      }
 
+   // (تصحیح شده - از m_prefix استفاده نمی‌کند چون نام کامل ارسال می‌شود)
    void UpdateLabelText(string name, string text)
      {
-      ObjectSetString(0, name, OBJPROP_TEXT, text); // <-- تصحیح شد
+      ObjectSetString(0, name, OBJPROP_TEXT, text);
      }
 };
 //+------------------------------------------------------------------+

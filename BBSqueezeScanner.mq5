@@ -41,23 +41,28 @@ input int              InpMinTFAligned  = 3; // حداقل تعداد تایم�
 //--- متغیر سراسری برای مدیریت آپدیت (جلوگیری از آپدیت در هر تیک) ---
 datetime g_last_update_time = 0;
 input int    InpUpdateIntervalSec = 10; // آپدیت هر ۱۰ ثانیه
+bool g_is_loading = true; // (فرض می‌کنیم اولش در حال لود هستیم)
 
 //+------------------------------------------------------------------+
 //| OnInit
 //+------------------------------------------------------------------+
 int OnInit()
-  {
-
+  {   
    g_ScannerPanel.Initialize(
-    CORNER_LEFT_UPPER, InpPanelX, InpPanelY,
+      CORNER_LEFT_UPPER, InpPanelX, InpPanelY,
       InpPairList, InpTimeframes,
       InpBBPeriod, InpBBDeviation, InpKcPeriod, InpKcMultiplier,
       InpCheckMAStack, InpMAPeriods, InpMAMethod, InpMAPrice,
       InpMinTFAligned, InpShift
    );
-   EventSetTimer(InpUpdateIntervalSec);
+
+   EventSetTimer(1); 
+   g_is_loading = true; 
+   
    return(INIT_SUCCEEDED);
   }
+
+
 //+------------------------------------------------------------------+
 //| OnDeinit
 //+------------------------------------------------------------------+
@@ -72,11 +77,28 @@ void OnDeinit(const int reason)
 //+------------------------------------------------------------------+
 void OnTimer()
   {
-   // --- صدا زدن تابع آپدیت پنل ---
-   // (در حال حاضر این تابع از دیتای شبیه‌سازی شده استفاده می‌کند)
-   g_ScannerPanel.UpdatePanel();
+     
+   // --- تابع آپدیت پنل را صدا می‌زنیم ---
+   // (این تابع حالا به ما میگه که آیا هنوز در حال لود هست یا نه)
+   bool still_loading = g_ScannerPanel.UpdatePanel(); // (باید تابع UpdatePanel را تغییر دهیم تا bool برگرداند)
+   
+   if(still_loading && g_is_loading)
+     {
+      // (هنوز در حال لود هستیم، تایمر 1 ثانیه‌ای فعال بماند)
+      // (نیازی به تنظیم مجدد تایمر نیست)
+     }
+   else if(!still_loading && g_is_loading)
+     {
+      // (لود تمام شد! حالا از حالت لود خارج شو)
+      Print("BBSqueezeScanner: All data loaded. Switching to " + (string)InpUpdateIntervalSec + "s interval.");
+      g_is_loading = false;
+      EventSetTimer(InpUpdateIntervalSec); // (تایمر را روی اینتروال عادی کاربر تنظیم کن)
+     }
+   else if(!g_is_loading)
+     {
+      // (در حالت عادی هستیم، تایمر روی InpUpdateIntervalSec باقی می‌ماند)
+     }
   }
-
 //+------------------------------------------------------------------+
 //| OnChartEvent (برای جابجایی پنل - فعلا خالی)
 //+------------------------------------------------------------------+

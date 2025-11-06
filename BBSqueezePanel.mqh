@@ -1,7 +1,7 @@
 //+------------------------------------------------------------------+
 //|                                           BBSqueezePanel.mqh |
 //|        کلاس پنل اسکنر BB Squeeze (بر اساس VdsPanel)           |
-//|                        (نسخه ۱.۲ - ریفکتور شده)                |
+//|                    (نسخه ۱.۴ - Non-Blocking)                   |
 //+------------------------------------------------------------------+
 #ifndef BBSQUEZEPANEL_MQH
 #define BBSQUEZEPANEL_MQH
@@ -27,8 +27,6 @@ struct SqueezeResult
    string            cellText;
    color             cellBgColor;     // رنگ پس‌زمینه سلول
    color             pairNameColor;     // رنگ جفت ارز (برای همسویی)
-
-   // ===> FIX: متغیرهای تکراری حذف شدند
 };
 //+------------------------------------------------------------------+
 //| کلاس پنل اسکنر BB Squeeze
@@ -53,7 +51,7 @@ private:
    string            m_tf_array[];      // آرایه تایم‌فریم‌ها (متنی)
    ENUM_TIMEFRAMES   m_tf_enum_array[]; // آرایه تایم‌فریم‌ها (MQL5 Enum)
 
-   // --- پارامترهای اندیکاتور (از پاین اسکریپت) ---
+   // --- پارامترهای اندیکاتور ---
    int               m_bb_period;
    double            m_bb_deviation;
    int               m_kc_period;
@@ -66,7 +64,7 @@ private:
    int               m_shift;
    int               m_min_tf_aligned;
 
-   // --- رنگ‌ها (از پاین اسکریپت) ---
+   // --- رنگ‌ها ---
    color             m_color_low_vol;
    color             m_color_high_vol;
    color             m_color_ma_up;
@@ -75,22 +73,19 @@ private:
    color             m_color_kc_down;
    color             m_color_text;
    color             m_color_bg;
-
+   color             m_color_loading;   // رنگ سلول در حال لود
 
    //------------------------------------------------------------------
-   // تابع کمکی: تبدیل رشته قیمت به ENUM_APPLIED_PRICE (اصلاح شده)
+   // تابع کمکی: تبدیل رشته قیمت به ENUM_APPLIED_PRICE
    //------------------------------------------------------------------
    ENUM_APPLIED_PRICE GetPriceEnum(string price_str)
      {
       if(price_str == "Open") return PRICE_OPEN;
       if(price_str == "High") return PRICE_HIGH;
       if(price_str == "Low") return PRICE_LOW;
-      
-      // ===> FIX: استفاده از Enum های صحیح MQL5
       if(price_str == "HL2") return PRICE_MEDIAN;     // (Pine Script: hl2)
       if(price_str == "HLC3") return PRICE_TYPICAL;    // (Pine Script: hlc3)
       if(price_str == "OHLC4") return PRICE_WEIGHTED;   // (Pine Script: ohlc4)
-
       return PRICE_CLOSE; // پیش‌فرض
      }
 
@@ -108,19 +103,17 @@ private:
 
 public:
    //------------------------------------------------------------------
-   // سازنده (Constructor) - تنظیمات پیش‌فرض
+   // سازنده (Constructor)
    //------------------------------------------------------------------
    CBBSqueezeScannerPanel(void)
      {
-      // مقداردهی اولیه متغیرها
       m_prefix = "BBSqueeze_" + (string)ChartID() + "_";
       m_font_name = "Tahoma";
       m_font_size = 8;
-      m_cell_width = 100; // 100 پیکسل عرض برای هر سلول
-      m_cell_height = 20;  // 20 پیکسل ارتفاع
-      m_header_width = 80; // 80 پیکسل برای نام جفت ارز
+      m_cell_width = 100; 
+      m_cell_height = 20;  
+      m_header_width = 80; 
 
-      // تنظیمات پیش‌فرض منطق (مثل پاین اسکریپت)
       m_bb_period = 20;
       m_bb_deviation = 2.0;
       m_kc_period = 20;
@@ -132,7 +125,6 @@ public:
       m_ma_price_str = "Close";
       m_min_tf_aligned = 3;
 
-      // تنظیمات پیش‌فرض رنگ‌ها (مثل پاین اسکریپت)
       m_color_low_vol = C'255,0,0';     // Red
       m_color_high_vol = C'0,128,0';    // Green
       m_color_ma_up = C'0,255,255';     // Aqua
@@ -141,10 +133,11 @@ public:
       m_color_kc_down = C'255,0,0';     // Red
       m_color_text = C'255,255,255';   // White
       m_color_bg = C'30,30,30';         // Dark Grey
+      m_color_loading = C'50,50,50';   // Loading Grey
      }
 
    //------------------------------------------------------------------
-   // ۱. راه‌اندازی (Initialize) - گرفتن ورودی‌ها از EA
+   // ۱. راه‌اندازی (Initialize)
    //------------------------------------------------------------------
    void Initialize(ENUM_BASE_CORNER corner, int x, int y,
                    string pair_list, string tf_list,
@@ -153,16 +146,11 @@ public:
                    int min_tf_align, int shift
                   )
      {
-      // --- ذخیره موقعیت پنل ---
       m_panel_corner = corner;
       m_x_offset = x;
       m_y_offset = y;
-
-      // --- ذخیره لیست‌های اسکن ---
       m_pair_list_str = pair_list;
       m_tf_list_str = tf_list;
-
-      // --- ذخیره تنظیمات اندیکاتور ---
       m_bb_period = bb_period;
       m_bb_deviation = bb_dev;
       m_kc_period = kc_period;
@@ -174,13 +162,11 @@ public:
       m_min_tf_aligned = min_tf_align;
       m_shift = shift;
 
-      // --- پردازش رشته‌ها و تبدیل به آرایه ---
       StringSplit(m_pair_list_str, ',', m_pair_array);
       StringSplit(m_tf_list_str, ',', m_tf_array);
       ParseMaPeriods();
       ParseTimeframes();
 
-      // --- رسم ساختار اولیه پنل ---
       DrawPanelLayout();
      }
 
@@ -194,62 +180,56 @@ public:
      }
 
    //------------------------------------------------------------------
-   // ۳. آپدیت پنل (تابع اصلی که توسط EA صدا زده می‌شود)
+   // ۳. آپدیت پنل (تابع اصلی)
    //------------------------------------------------------------------
-   void UpdatePanel()
+bool UpdatePanel() // ===> FIX: حالا bool برمی‌گرداند
      {
       int num_pairs = ArraySize(m_pair_array);
       int num_tfs = ArraySize(m_tf_array);
+      
+      bool is_still_loading = false; // (پیش‌فرض: لود تمام شده)
 
-      for(int i = 0; i < num_pairs; i++) // حلقه روی جفت ارزها (ردیف‌ها)
+      for(int i = 0; i < num_pairs; i++) 
         {
          int aligned_up_count = 0;
          int aligned_down_count = 0;
 
-         for(int j = 0; j < num_tfs; j++) // حلقه روی تایم‌فریم‌ها (ستون‌ها)
+         for(int j = 0; j < num_tfs; j++) 
            {
-            // ۱. دریافت داده‌ها
             SqueezeResult result;
             result = f_calculateAllSignals(m_pair_array[i], m_tf_enum_array[j]);
 
-            // ۲. شمارش همسویی MA
             if(m_check_ma_stack)
               {
                if(result.isAscending) aligned_up_count++;
                if(result.isDescending) aligned_down_count++;
               }
+              
+            if(result.cellText == "...")
+              {
+               is_still_loading = true; // ===> FIX: اگر حتی یک سلول در حال لود بود، فلگ را true کن
+              }
 
-            // ۳. آپدیت لیبل سلول
             string cell_name = m_prefix + "cell_" + (string)i + "_" + (string)j;
             UpdateLabelText(cell_name, result.cellText);
             ObjectSetInteger(0, cell_name, OBJPROP_BGCOLOR, result.cellBgColor);
-            
-            color text_color = m_color_text;
-            if(result.inSqueeze) text_color = m_color_text;
-            else text_color = m_color_text;
-            ObjectSetInteger(0, cell_name, OBJPROP_COLOR, text_color);
+            ObjectSetInteger(0, cell_name, OBJPROP_COLOR, m_color_text);
            }
 
-         // ۴. آپدیت رنگ نام جفت ارز بر اساس همسویی
          string pair_label_name = m_prefix + "pair_" + (string)i;
-         color pair_name_color = m_color_text; // رنگ پیش‌فرض
+         color pair_name_color = m_color_text; 
          if(m_check_ma_stack)
            {
-            if(aligned_up_count >= m_min_tf_aligned)
-              {
-               pair_name_color = m_color_ma_up;
-              }
-            else if(aligned_down_count >= m_min_tf_aligned)
-              {
-               pair_name_color = m_color_ma_down;
-              }
+            if(aligned_up_count >= m_min_tf_aligned) pair_name_color = m_color_ma_up;
+            else if(aligned_down_count >= m_min_tf_aligned) pair_name_color = m_color_ma_down;
            }
          ObjectSetInteger(0, pair_label_name, OBJPROP_COLOR, pair_name_color);
         }
-
+        
       ChartRedraw(0);
+      
+      return is_still_loading; // ===> FIX: وضعیت لود را به OnTimer برگردان
      }
-
 
 //+------------------------------------------------------------------+
 //| بخش خصوصی (توابع کمکی)
@@ -257,14 +237,14 @@ public:
 private:
 
    //------------------------------------------------------------------
-   // (منطق اصلی) محاسبه سیگنال‌ها برای یک سلول (نسخه ریفکتور شده)
+   // (منطق اصلی) محاسبه سیگنال‌ها (نسخه ۱.۴ - Non-Blocking)
    //------------------------------------------------------------------
    SqueezeResult f_calculateAllSignals(string symbol, ENUM_TIMEFRAMES tf)
      {
       SqueezeResult res;
-      ZeroMemory(res);
+      // ZeroMemory(res);
       res.cellText = "...";
-      res.cellBgColor = C'50,50,50';
+      res.cellBgColor = m_color_loading;
 
       // --- ۱. آماده‌سازی پارامترها ---
       ENUM_APPLIED_PRICE price_enum = GetPriceEnum(m_ma_price_str);
@@ -273,12 +253,38 @@ private:
       int bars_to_copy = 100 + m_shift; 
       if(bars_to_copy < 100) bars_to_copy = 100; 
 
-      // --- ۲. ساخت هندل‌های اندیکاتور ---
+      // --- ۲. ===> REFACTOR: فچ کردن غیرمسدودکننده دیتا <=== ---
+      double close_prices[];
+      ArrayResize(close_prices, bars_to_copy + 2); 
+      
+      // (تلاش برای کپی کردن دیتای قیمت)
+      if(CopyClose(symbol, tf, 0, bars_to_copy + 2, close_prices) < bars_to_copy)
+        {
+         // (دیتا آماده نیست. بررسی خطا)
+         long error_code = GetLastError();
+         if(
+                  // 4302
+            error_code == ERR_HISTORY_NOT_FOUND)         // 5202
+           {
+            // (دیتا در حال دانلود است. منتظر نمان! فقط خارج شو)
+            return res; // (res حاوی "..." است)
+           }
+         else
+           {
+            // (یک خطای دیگر رخ داده، مثلا نماد اشتباه است)
+            res.cellText = "Err " + (string)error_code;
+            return res;
+           }
+        }
+      // --- (اگر کد به اینجا برسد، یعنی دیتا آماده است) ---
+
+
+      // --- ۳. ساخت هندل‌های اندیکاتتور ---
+      // (چون دیتا آماده است، اینها نباید خطای 4302 بدهند)
       int bb_handle = iBands(symbol, tf, m_bb_period, 0, m_bb_deviation, price_enum);
       int kc_ma_handle = iMA(symbol, tf, m_kc_period, 0, MODE_SMA, price_enum); 
       int kc_atr_handle = iATR(symbol, tf, m_kc_period); 
 
-      // ساخت هندل برای MA Stack
       int num_ma = ArraySize(m_ma_periods_array);
       int ma_handles[];
       ArrayResize(ma_handles, num_ma);
@@ -302,26 +308,13 @@ private:
          return res;
         }
 
-      // --- ۳. کپی کردن دیتا در بافرها ---
+      // --- ۴. کپی کردن دیتای اندیکاتورها ---
       double bb_upper[], bb_lower[];
       double kc_basis[], kc_atr[];
 
       ArrayResize(bb_upper, bars_to_copy); ArrayResize(bb_lower, bars_to_copy);
       ArrayResize(kc_basis, bars_to_copy); ArrayResize(kc_atr, bars_to_copy);
 
-      // (فقط قیمت Close را برای Keltner Trend کپی می‌کنیم)
-      double close_prices[];
-      ArrayResize(close_prices, bars_to_copy + 2); // +2 برای [shift+1]
-      if(CopyClose(symbol, tf, 0, bars_to_copy + 2, close_prices) < bars_to_copy + 2)
-        {
-         res.cellText = "Price Err";
-         // ===> FIX: پاکسازی کامل هندل‌ها
-         IndicatorRelease(bb_handle); IndicatorRelease(kc_ma_handle); IndicatorRelease(kc_atr_handle);
-         for(int k = 0; k < num_ma; k++) IndicatorRelease(ma_handles[k]);
-         return res;
-        }
-
-      // کپی دیتای اندیکاتورها
       if(CopyBuffer(bb_handle, 1, 0, bars_to_copy, bb_upper) < bars_to_copy ||
          CopyBuffer(bb_handle, 2, 0, bars_to_copy, bb_lower) < bars_to_copy ||
          CopyBuffer(kc_ma_handle, 0, 0, bars_to_copy, kc_basis) < bars_to_copy ||
@@ -333,20 +326,17 @@ private:
          return res;
         }
 
-      // ===> REFACTOR START: کپی دیتای MA Stack (بخش اصلاح شده) <===
-      double ma_values[]; // آرایه 1 بعدی برای نگهداری مقادیر MA در نقطه m_shift
+      double ma_values[];
       ArrayResize(ma_values, num_ma);
-      double temp_buffer[1]; // بافر موقت برای کپی 1 مقدار
+      double temp_buffer[1]; 
 
-      if(m_check_ma_stack && num_ma > 1) // (فقط اگر به MA Stack نیاز داریم، کپی کن)
+      if(m_check_ma_stack && num_ma > 1)
         {
          for(int i = 0; i < num_ma; i++)
            {
-            // فقط 1 مقدار از کندل m_shift را کپی می‌کنیم
             if(CopyBuffer(ma_handles[i], 0, m_shift, 1, temp_buffer) < 1)
               {
                res.cellText = "MA Cpy Err";
-               // پاکسازی کامل هندل‌ها
                IndicatorRelease(bb_handle); IndicatorRelease(kc_ma_handle); IndicatorRelease(kc_atr_handle);
                for(int k = 0; k < num_ma; k++) IndicatorRelease(ma_handles[k]);
                return res;
@@ -354,9 +344,8 @@ private:
             ma_values[i] = temp_buffer[0];
            }
         }
-      // ===> REFACTOR END <===
       
-      // --- ۴. انجام محاسبات (در اندیس shift) ---
+      // --- ۵. انجام محاسبات (در اندیس shift) ---
       
       // (الف) منطق Squeeze
       double upperKC = kc_basis[m_shift] + (kc_atr[m_shift] * m_kc_multiplier);
@@ -374,11 +363,8 @@ private:
          res.isDescending = true;
          for(int i = 0; i < num_ma - 1; i++)
            {
-            // ===> FIX: استفاده از آرایه 1 بعدی جدید
-            if(ma_values[i] <= ma_values[i+1])
-               res.isAscending = false;
-            if(ma_values[i] >= ma_values[i+1])
-               res.isDescending = false;
+            if(ma_values[i] <= ma_values[i+1]) res.isAscending = false;
+            if(ma_values[i] >= ma_values[i+1]) res.isDescending = false;
            }
          if(res.isAscending == res.isDescending)
            {
@@ -389,26 +375,28 @@ private:
 
       // (د) منطق "Bars Since Switch"
       res.barsSinceSwitch = 0;
-      int max_scan = MathMin(bars_to_copy - 1, 50); // 50 = m_maxPastBars
+      int max_scan = MathMin(bars_to_copy - 1, 50); 
       for(int i = m_shift + 1; i < m_shift + max_scan; i++)
         {
+         if(i >= bars_to_copy) break; // اطمینان از عدم خروج از آرایه
+         
          double upperKC_hist = kc_basis[i] + (kc_atr[i] * m_kc_multiplier);
          double lowerKC_hist = kc_basis[i] - (kc_atr[i] * m_kc_multiplier);
          bool inSqueeze_hist = (bb_lower[i] > lowerKC_hist) && (bb_upper[i] < upperKC_hist);
 
-         if(inSqueeze_hist != res.inSqueeze) // اگر سوییچ پیدا شد
+         if(inSqueeze_hist != res.inSqueeze) 
            {
             res.barsSinceSwitch = (i - m_shift);
             break;
            }
          
-         if(i == m_shift + max_scan - 1) // اگر به انتهای اسکن رسیدیم
+         if(i == m_shift + max_scan - 1) 
            {
-            res.barsSinceSwitch = max_scan; // نشانه‌ی (+)
+            res.barsSinceSwitch = max_scan;
            }
         }
 
-      // --- ۵. پاکسازی تمام هندل‌ها ---
+      // --- ۶. پاکسازی تمام هندل‌ها ---
       IndicatorRelease(bb_handle);
       IndicatorRelease(kc_ma_handle);
       IndicatorRelease(kc_atr_handle);
@@ -417,7 +405,7 @@ private:
          IndicatorRelease(ma_handles[i]);
         }
 
-      // --- ۶. فرمت کردن خروجی نهایی ---
+      // --- ۷. فرمت کردن خروجی نهایی ---
       string squeeze_char = res.inSqueeze ? "●" : "●";
       string bars_str = "(" + (res.barsSinceSwitch >= 50 ? "+" : (string)res.barsSinceSwitch) + ")";
       string ma_arrow = res.isAscending ? " ↗" : (res.isDescending ? " ↘" : "");
@@ -425,23 +413,23 @@ private:
       
       res.cellText = squeeze_char + bars_str + ma_arrow + kc_arrow;
       res.cellBgColor = res.inSqueeze ? m_color_low_vol : m_color_high_vol;
-
+      Print(symbol, " ", EnumToString(tf), " -> ", res.cellText);
       return res;
      }
 
    //------------------------------------------------------------------
-   // رسم ساختار اولیه پنل (فقط یکبار در Initialize)
+   // رسم ساختار اولیه پنل
    //------------------------------------------------------------------
    void DrawPanelLayout()
      {
       int num_pairs = ArraySize(m_pair_array);
       int num_tfs = ArraySize(m_tf_array);
-      if(num_pairs == 0 || num_tfs == 0) return; // اگر ورودی خالی بود، رسم نکن
+      if(num_pairs == 0 || num_tfs == 0) return; 
 
       int total_width = m_header_width + (num_tfs * m_cell_width);
       int total_height = m_cell_height + (num_pairs * m_cell_height);
 
-      CreateRect("Panel_BG", 0, 0, total_width, total_height, m_color_bg, 200); // 200 = alpha
+      CreateRect("Panel_BG", 0, 0, total_width, total_height, m_color_bg, 200); 
 
       int current_y = 0;
 
@@ -464,7 +452,7 @@ private:
            {
             int x_pos = m_header_width + (j * m_cell_width);
             string cell_name = "cell_" + (string)i + "_" + (string)j;
-            CreateLabel(cell_name, "...", x_pos, current_y, m_cell_width, m_cell_height, C'50,50,50', m_color_text, ALIGN_CENTER);
+            CreateLabel(cell_name, "...", x_pos, current_y, m_cell_width, m_cell_height, m_color_loading, m_color_text, ALIGN_CENTER);
            }
          current_y += m_cell_height;
         }
@@ -509,7 +497,7 @@ private:
      }
 
    //------------------------------------------------------------------
-   // توابع کمکی رسم (کپی شده از VdsPanel با کمی تغییر)
+   // توابع کمکی رسم
    //------------------------------------------------------------------
    void CreateRect(string name, int x, int y, int w, int h, color c, uchar alpha = 255)
      {
@@ -523,7 +511,7 @@ private:
          ObjectSetInteger(0, obj_name, OBJPROP_XSIZE, w);
          ObjectSetInteger(0, obj_name, OBJPROP_YSIZE, h);
          ObjectSetInteger(0, obj_name, OBJPROP_BGCOLOR, c);
-         ObjectSetInteger(0, obj_name, OBJPROP_COLOR, c); // برای بوردر
+         ObjectSetInteger(0, obj_name, OBJPROP_COLOR, c); 
          ObjectSetInteger(0, obj_name, OBJPROP_BORDER_TYPE, BORDER_FLAT);
          ObjectSetInteger(0, obj_name, OBJPROP_BACK, true);
          ObjectSetInteger(0, obj_name, OBJPROP_SELECTABLE, false);
@@ -549,7 +537,7 @@ private:
            }
          else if(align == ALIGN_RIGHT)
            {
-            x_pos = m_x_offset + x + w - 5; // 5 پیکسل پدینگ
+            x_pos = m_x_offset + x + w - 5; 
             anchor = ANCHOR_RIGHT;
            }
 
@@ -567,7 +555,7 @@ private:
 
    void UpdateLabelText(string name, string text)
      {
-      ObjectSetString(0, m_prefix + name, OBJPROP_TEXT, text);
+      ObjectSetString(0, name, OBJPROP_TEXT, text); // <-- تصحیح شد
      }
 };
 //+------------------------------------------------------------------+

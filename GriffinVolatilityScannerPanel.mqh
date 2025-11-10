@@ -328,16 +328,16 @@ private:
       ArrayResize(kc_basis, bars_to_copy); ArrayResize(kc_atr, bars_to_copy);
 
       if(CopyBuffer(bb_handle, 0, 0, bars_to_copy, bb_basis) < bars_to_copy ||
-         CopyBuffer(bb_handle, 1, 0, bars_to_copy, bb_upper) < bars_to_copy ||
-         CopyBuffer(bb_handle, 2, 0, bars_to_copy, bb_lower) < bars_to_copy ||
-         CopyBuffer(kc_ma_handle, 0, 0, bars_to_copy, kc_basis) < bars_to_copy ||
-         CopyBuffer(kc_atr_handle, 0, bars_to_copy, kc_atr) < bars_to_copy)
-        {
-         res.cellText = "Copy Err";
-         IndicatorRelease(bb_handle); IndicatorRelease(kc_ma_handle); IndicatorRelease(kc_atr_handle);
-         for(int i = 0; i < num_ma; i++) IndicatorRelease(ma_handles[i]);
-         return res;
-        }
+      CopyBuffer(bb_handle, 1, 0, bars_to_copy, bb_upper) < bars_to_copy ||
+      CopyBuffer(bb_handle, 2, 0, bars_to_copy, bb_lower) < bars_to_copy ||
+      CopyBuffer(kc_ma_handle, 0, 0, bars_to_copy, kc_basis) < bars_to_copy ||
+      CopyBuffer(kc_atr_handle, 0, 0, bars_to_copy, kc_atr) < bars_to_copy)
+     {
+      res.cellText = "Copy Err";
+      IndicatorRelease(bb_handle); IndicatorRelease(kc_ma_handle); IndicatorRelease(kc_atr_handle);
+      for(int i = 0; i < num_ma; i++) IndicatorRelease(ma_handles[i]);
+      return res;
+     }
 
       double ma_values[];
       ArrayResize(ma_values, num_ma);
